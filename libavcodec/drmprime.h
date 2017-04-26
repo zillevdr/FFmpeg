@@ -1,17 +1,17 @@
-#ifndef DRMPRIME_H
-#define DRMPRIME_H
+#ifndef AVCODEC_DRMPRIME_H
+#define AVCODEC_DRMPRIME_H
 
 #include <stdint.h>
 
-#define FF_DRMPRIME_NUM_PLANES	4	// maximum number of planes
+#define AV_FF_DRMPRIME_NUM_PLANES	4	// maximum number of planes
 
-typedef struct {
+typedef struct av_drmprime {
 
-    uint32_t strides[FF_DRMPRIME_NUM_PLANES];
-    uint32_t offsets[FF_DRMPRIME_NUM_PLANES];
-    uint32_t fd;
+    int strides[AV_FF_DRMPRIME_NUM_PLANES];
+    int offsets[AV_FF_DRMPRIME_NUM_PLANES];
+    int fd[AV_FF_DRMPRIME_NUM_PLANES];
     uint32_t format;
 
 } av_drmprime;
 
-#endif // DRMPRIME_H
+#endif // AVCODEC_DRMPRIME_H
