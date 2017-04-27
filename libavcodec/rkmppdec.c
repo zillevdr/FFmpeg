@@ -19,9 +19,6 @@
 #define RECEIVE_FRAME_TIMEOUT	100
 
 typedef struct {
-
-    AVBufferRef *ref;
-
     MppCtx ctx;
     MppApi *mpi;
     MppBufferGroup frame_group;
@@ -34,11 +31,16 @@ typedef struct {
 typedef struct {
     AVClass *av_class;
 
-    RKMPPDecoder *decoder;
+    AVBufferRef *decoder_ref;
 
     int framecount;
 
 } RKMPPDecodeContext;
+
+typedef struct {
+    MppFrame frame;
+    AVBufferRef *decoder_ref;
+} RKMPPFrameContext;
 
 static MppCodingType ffrkmpp_get_codingtype(AVCodecContext *avctx)
 {
@@ -64,7 +66,7 @@ static int ffrkmpp_write_data(AVCodecContext *avctx, char *buffer, int size, int
     MppPacket packet;
     MPP_RET ret = MPP_OK;
     RKMPPDecodeContext *rk_context = avctx->priv_data;
-    RKMPPDecoder *decoder = rk_context->decoder;
+    RKMPPDecoder *decoder = (RKMPPDecoder *)rk_context->decoder_ref->data;
 
     // create the MPP packet
     ret = mpp_packet_init(&packet, buffer, size);
@@ -73,18 +75,16 @@ static int ffrkmpp_write_data(AVCodecContext *avctx, char *buffer, int size, int
         return ret;
     }
 
-    // set the pts
     mpp_packet_set_pts(packet, pts);
 
     // if we have a NULL packet, then assume EOS
     if (!buffer)
         mpp_packet_set_eos(packet);
 
-    // write it to decoder
     ret = decoder->mpi->decode_put_packet(decoder->ctx, packet);
 
     if (ret != MPP_ERR_BUFFER_FULL)
-        av_log(avctx, AV_LOG_ERROR, "Wrote %d bytes to decoder", size);
+        av_log(avctx, AV_LOG_DEBUG, "Wrote %d bytes to decoder\n", size);
 
     mpp_packet_deinit(&packet);
 
@@ -94,17 +94,13 @@ static int ffrkmpp_write_data(AVCodecContext *avctx, char *buffer, int size, int
 static int ffrkmpp_close_decoder(AVCodecContext *avctx)
 {
     RKMPPDecodeContext *rk_context = avctx->priv_data;
-    RKMPPDecoder *decoder = rk_context->decoder;
-
-    av_buffer_unref(&decoder->ref);
-
+    av_buffer_unref(&rk_context->decoder_ref);
     return 0;
 }
 
 static void ffrkmpp_release_decoder(void *opaque, uint8_t *data)
 {
     RKMPPDecoder *decoder = (RKMPPDecoder *)data;
-
     decoder->mpi->reset(decoder->ctx);
     mpp_destroy(decoder->ctx);
     decoder->ctx = NULL;
@@ -132,11 +128,9 @@ static int ffrkmpp_init_decoder(AVCodecContext *avctx)
         goto fail;
     }
 
-    rk_context->decoder = decoder;
-
-    decoder->ref = av_buffer_create((uint8_t*)decoder, sizeof(*decoder), ffrkmpp_release_decoder,
+    rk_context->decoder_ref = av_buffer_create((uint8_t*)decoder, sizeof(*decoder), ffrkmpp_release_decoder,
                                     NULL, AV_BUFFER_FLAG_READONLY);
-    if (!decoder->ref) {
+    if (!rk_context->decoder_ref) {
         ret = AVERROR(ENOMEM);
         goto fail;
     }
@@ -185,8 +179,7 @@ static int ffrkmpp_init_decoder(AVCodecContext *avctx)
     return 0;
 
 fail:
-    if (decoder)
-        av_buffer_unref(&decoder->ref);
+    av_buffer_unref(&rk_context->decoder_ref);
 
     av_log(avctx, AV_LOG_ERROR, "Failed to initialize RKMPP decoder.\n");
     ffrkmpp_close_decoder(avctx);
@@ -196,7 +189,7 @@ fail:
 static int ffrkmpp_send_packet(AVCodecContext *avctx, const AVPacket *avpkt)
 {
     RKMPPDecodeContext *rk_context = avctx->priv_data;
-    RKMPPDecoder *decoder = rk_context->decoder;
+    RKMPPDecoder *decoder = (RKMPPDecoder *)rk_context->decoder_ref->data;
     MPP_RET  ret = MPP_OK;
 
     // handle EOF
@@ -240,14 +233,19 @@ static int ffrkmpp_send_packet(AVCodecContext *avctx, const AVPacket *avpkt)
 
 static void ffrkmpp_release_frame(void *opaque, uint8_t *data)
 {
-    MppFrame mppframe = (MppFrame)opaque;
-    mpp_frame_deinit(&mppframe);
+    av_drmprime *primedata = (av_drmprime*)data;
+    AVBufferRef *ref = (AVBufferRef *)primedata->priv;
+    RKMPPFrameContext *framecontext = (RKMPPFrameContext *)ref->data;
+
+    mpp_frame_deinit(&framecontext->frame);
+    av_buffer_unref(&framecontext->decoder_ref);
 }
 
 static int ffrkmpp_retreive_frame(AVCodecContext *avctx, AVFrame *frame)
 {
     RKMPPDecodeContext *rk_context = avctx->priv_data;
-    RKMPPDecoder *decoder = rk_context->decoder;
+    RKMPPDecoder *decoder = (RKMPPDecoder *)rk_context->decoder_ref->data;
+    RKMPPFrameContext *framecontext;
     MPP_RET  ret = MPP_OK;
     MppFrame mppframe = NULL;
     MppBuffer buffer = NULL;
@@ -255,13 +253,13 @@ static int ffrkmpp_retreive_frame(AVCodecContext *avctx, AVFrame *frame)
     av_drmprime *primedata = NULL;
     int retrycount = 0;
 
-    // now we will try to get a frame back
-
+    // on start of decoding, MPP can return -1, which is supposed to be expected
+    // this is due to some internal MPP init which is not completed, that will
+    // only happen in the first few frames queries, but should not be interpreted
+    // as an error, Therefore we need to retry a couple times when we get -1
+    // in order to let it time to complete it's init, then we sleep a bit between retries.
 retry_get_frame :
     ret = decoder->mpi->decode_get_frame(decoder->ctx, &mppframe);
-
-    // on start of decoding, MPP can return -1, which is supposed to be expected
-    // then we need to retry a couple times
     if (ret != MPP_OK && ret != MPP_ERR_TIMEOUT) {
         if (retrycount < 5) {
             usleep(50000);
@@ -319,25 +317,36 @@ retry_get_frame :
             primedata->strides[1]   = primedata->strides[0];
             primedata->offsets[0]   = 0;
             primedata->offsets[1]   = primedata->strides[0] * mpp_frame_get_ver_stride(mppframe);
-            primedata->fd[0]        = mpp_buffer_get_fd(buffer);
+            primedata->fds[0]        = mpp_buffer_get_fd(buffer);
             primedata->format       = ffrkmpp_get_frameformat(mpp_frame_get_fmt(mppframe));
 
             frame->data[3] = (uint8_t*)primedata;
             frame->buf[0]  = av_buffer_create((uint8_t*)primedata, sizeof(*primedata), ffrkmpp_release_frame,
-                                          mppframe, AV_BUFFER_FLAG_READONLY);
+                                                NULL, AV_BUFFER_FLAG_READONLY);
 
             if (!frame->buf[0]) {
                 ret = AVERROR(ENOMEM);
                 goto fail;
             }
 
-            // add a ref to decoder for each frame as we need to release it
-            // only once all frames have been released
-            frame->buf[1] = av_buffer_ref(decoder->ref);
+            // we also allocate a struct in buf[0] that will allow to hold additionnal information
+            // for releasing properly MPP frames and decoder
+            primedata->priv = av_buffer_allocz(sizeof(*framecontext));
+            if (!primedata->priv) {
+                av_log(avctx, AV_LOG_ERROR, "Failed to allocated drm prime private data.\n");
+                ret = AVERROR(ENOMEM);
+                goto fail;
+            }
+
+            // MPP decoder needs to be closed only when all frames have been released.
+            framecontext = (RKMPPFrameContext*)((AVBufferRef*)primedata->priv)->data;
+            framecontext->decoder_ref = av_buffer_ref(rk_context->decoder_ref);
+            framecontext->frame = mppframe;
 
             return 0;
         } else {
             av_log(avctx, AV_LOG_ERROR, "Failed to retrieve the frame buffer, frame is dropped (code = %d)\n", ret);
+            mpp_frame_deinit(&mppframe);
         }
     } else {
         if (decoder->eos_reached)
@@ -359,7 +368,7 @@ fail:
 static int ffrkmpp_receive_frame(AVCodecContext *avctx, AVFrame *frame)
 {
     RKMPPDecodeContext *rk_context = avctx->priv_data;
-    RKMPPDecoder *decoder = rk_context->decoder;
+    RKMPPDecoder *decoder = (RKMPPDecoder *)rk_context->decoder_ref->data;
     AVPacket pkt = {0};
     int ret;
     RK_S32 freeslots;
@@ -394,7 +403,7 @@ static void ffrkmpp_flush(AVCodecContext *avctx)
 {
     MPP_RET ret = MPP_OK;
     RKMPPDecodeContext *rk_context = avctx->priv_data;
-    RKMPPDecoder *decoder = rk_context->decoder;
+    RKMPPDecoder *decoder = (RKMPPDecoder *)rk_context->decoder_ref->data;
 
     ret = decoder->mpi->reset(decoder->ctx);
     if (ret == MPP_OK)

@@ -9,8 +9,9 @@ typedef struct av_drmprime {
 
     int strides[AV_FF_DRMPRIME_NUM_PLANES];
     int offsets[AV_FF_DRMPRIME_NUM_PLANES];
-    int fd[AV_FF_DRMPRIME_NUM_PLANES];
+    int fds[AV_FF_DRMPRIME_NUM_PLANES];
     uint32_t format;
+    void *priv;
 
 } av_drmprime;
 
