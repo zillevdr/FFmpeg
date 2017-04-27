@@ -40,64 +40,6 @@ typedef struct {
 
 } RKMPPDecodeContext;
 
-static void profile_log(AVCodecContext *avctx, const char *fmt, ...)
-{
-    struct timespec time;
-    static struct timespec lasttime,starttime;
-    static int firstcall = 1;
-    int msec, usec, deltams;
-    va_list ap;
-    char stamp[32];
-    char msg[512];
-
-    if (firstcall) {
-        clock_gettime(CLOCK_REALTIME, &starttime);
-        firstcall = 0;
-    }
-
-    clock_gettime(CLOCK_REALTIME, &time);
-
-    msec = time.tv_nsec / 1000000;
-    usec = (time.tv_nsec - msec * 1000000) / 1000;
-    deltams = ((time.tv_sec * 1000000000 + time.tv_nsec) - (lasttime.tv_sec * 1000000000 + lasttime.tv_nsec)) / 1000000;
-
-    sprintf(stamp, "%03d:%03d.%03d (+%03d ms): ", (int)(time.tv_sec -  starttime.tv_sec), msec, usec, deltams);
-
-    lasttime.tv_sec = time.tv_sec;
-    lasttime.tv_nsec = time.tv_nsec;
-
-    va_start(ap, fmt);
-    vsprintf(msg, fmt, ap);
-    va_end(ap);
-
-    av_log(avctx, AV_LOG_DEBUG, "%s%s\n", stamp, msg);
-}
-
-static double ffrkmpp_compute_framerate(AVCodecContext *avctx)
-{
-    static struct timespec reftime;
-    static int refframecount;
-    struct timespec time;
-    double timediff;
-
-    RKMPPDecodeContext *rk_context = avctx->priv_data;
-
-    clock_gettime(CLOCK_REALTIME, &time);
-
-    if (rk_context->framecount == 1) {
-        refframecount = rk_context->framecount;
-        reftime.tv_sec  = time.tv_sec;
-        reftime.tv_nsec = time.tv_nsec;
-    }
-    timediff = ((double)time.tv_sec + ((double)time.tv_nsec / 1000000000.0)) -
-               ((double)reftime.tv_sec + ((double)reftime.tv_nsec / 1000000000.0));
-
-    if (timediff != 0)
-        return (double)(rk_context->framecount - refframecount) / timediff;
-    else
-        return 0;
-}
-
 static MppCodingType ffrkmpp_get_codingtype(AVCodecContext *avctx)
 {
     switch(avctx->codec_id) {
@@ -142,7 +84,7 @@ static int ffrkmpp_write_data(AVCodecContext *avctx, char *buffer, int size, int
     ret = decoder->mpi->decode_put_packet(decoder->ctx, packet);
 
     if (ret != MPP_ERR_BUFFER_FULL)
-        profile_log(avctx, "Wrote %d bytes to decoder", size);
+        av_log(avctx, AV_LOG_ERROR, "Wrote %d bytes to decoder", size);
 
     mpp_packet_deinit(&packet);
 
@@ -311,7 +253,6 @@ static int ffrkmpp_retreive_frame(AVCodecContext *avctx, AVFrame *frame)
     MppBuffer buffer = NULL;
     MppBufferInfo bufferinfo;
     av_drmprime *primedata = NULL;
-    double fps;
     int retrycount = 0;
 
     // now we will try to get a frame back
@@ -345,8 +286,7 @@ retry_get_frame :
             return AVERROR(EAGAIN);
         } else {
             rk_context->framecount++;
-            fps = ffrkmpp_compute_framerate(avctx);
-            profile_log(avctx, "Received frame, (%.2f fps)", fps);
+            av_log(avctx, AV_LOG_DEBUG, "Received a frame.\n");
         }
     }
 
