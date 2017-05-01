@@ -33,8 +33,6 @@ typedef struct {
 
     AVBufferRef *decoder_ref;
 
-    int framecount;
-
 } RKMPPDecodeContext;
 
 typedef struct {
@@ -205,12 +203,14 @@ static int ffrkmpp_send_packet(AVCodecContext *avctx, const AVPacket *avpkt)
 
     // on first packet, send extradata
     if (decoder->first_packet) {
-        ret = ffrkmpp_write_data(avctx, avctx->extradata,
-                                        avctx->extradata_size,
-                                        avpkt->pts);
-        if (ret) {
-            av_log(avctx, AV_LOG_ERROR, "Failed to write extradata to decoder\n");
-            return ret;
+        if (avctx->extradata_size) {
+            ret = ffrkmpp_write_data(avctx, avctx->extradata,
+                                            avctx->extradata_size,
+                                            avpkt->pts);
+            if (ret) {
+                av_log(avctx, AV_LOG_ERROR, "Failed to write extradata to decoder\n");
+                return ret;
+            }
         }
 
         decoder->first_packet = 0;
@@ -239,6 +239,7 @@ static void ffrkmpp_release_frame(void *opaque, uint8_t *data)
 
     mpp_frame_deinit(&framecontext->frame);
     av_buffer_unref(&framecontext->decoder_ref);
+    av_buffer_unref(&ref);
 }
 
 static int ffrkmpp_retreive_frame(AVCodecContext *avctx, AVFrame *frame)
@@ -283,13 +284,18 @@ retry_get_frame :
             // here decoder is fully initialized, we need to feed it again with data
             return AVERROR(EAGAIN);
         } else {
-            rk_context->framecount++;
             av_log(avctx, AV_LOG_DEBUG, "Received a frame.\n");
         }
     }
 
     // here we should have a valid frame
     if (mppframe) {
+        // smoother start decoder
+        if (mpp_frame_get_discard(mppframe) || mpp_frame_get_errinfo(mppframe)) {
+            ret = AVERROR(EAGAIN);
+            goto fail;
+        }
+
         // setup general frame fields
         frame->format = AV_PIX_FMT_RKMPP;
         frame->width  = mpp_frame_get_width(mppframe);
