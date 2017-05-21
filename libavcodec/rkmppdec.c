@@ -327,8 +327,8 @@ retry_get_frame :
         goto fail;
     }
 
-    // Check wether we have an info frame or not
     if (mppframe) {
+        // Check wether we have an info frame or not
         if (mpp_frame_get_info_change(mppframe)) {
             av_log(avctx, AV_LOG_INFO, "Decoder noticed an info change (%dx%d), format=%d\n",
                                         (int)mpp_frame_get_width(mppframe),  (int)mpp_frame_get_height(mppframe),
@@ -346,11 +346,8 @@ retry_get_frame :
         } else {
             av_log(avctx, AV_LOG_DEBUG, "Received a frame.\n");
         }
-    }
 
-    // here we should have a valid frame
-    if (mppframe) {
-
+        // here we should have a valid frame
         if (mpp_frame_get_discard(mppframe) || mpp_frame_get_errinfo(mppframe)) {
             ret = AVERROR(EAGAIN);
             goto fail;
