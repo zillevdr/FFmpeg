@@ -301,30 +301,30 @@ static int ffrkmpp_retrieve_frame(AVCodecContext *avctx, AVFrame *frame)
 {
     RKMPPDecodeContext *rk_context = avctx->priv_data;
     RKMPPDecoder *decoder = (RKMPPDecoder *)rk_context->decoder_ref->data;
-    RKMPPFrameContext *framecontext;
-    AVBufferRef *framecontextref;
+    RKMPPFrameContext *framecontext = NULL;
+    AVBufferRef *framecontextref = NULL;
     MPP_RET  ret = MPP_OK;
     MppFrame mppframe = NULL;
     MppBuffer buffer = NULL;
     av_drmprime *primedata = NULL;
-    int retrycount = 0;
 
-    // on start of decoding, MPP can return -1, which is supposed to be expected
-    // this is due to some internal MPP init which is not completed, that will
-    // only happen in the first few frames queries, but should not be interpreted
-    // as an error, Therefore we need to retry a couple times when we get -1
-    // in order to let it time to complete it's init, then we sleep a bit between retries.
 retry_get_frame :
     ret = decoder->mpi->decode_get_frame(decoder->ctx, &mppframe);
-    if (ret != MPP_OK && ret != MPP_ERR_TIMEOUT) {
-        if (retrycount < 5) {
-            usleep(50000);
-            retrycount++;
-            goto retry_get_frame;
-        } else {
-            av_log(avctx, AV_LOG_ERROR, "Failed to get a frame from MPP (code = %d)\n", ret);
-            goto fail;
-        }
+    if (ret != MPP_OK) {
+        av_log(avctx, AV_LOG_ERROR, "can't get a frame frome decoder (code = %d)\n", ret);
+        goto fail;
+    }
+
+    if (decoder->eos_reached && !mpp_frame_get_eos(mppframe)) {
+        if (mppframe)
+            mpp_frame_deinit(&mppframe);
+        usleep(10000);
+        goto retry_get_frame;
+    }
+    if (mppframe && mpp_frame_get_eos(mppframe)) {
+        av_log(avctx, AV_LOG_DEBUG, "EOS frame found\n");
+        ret = AVERROR_EXIT;
+        goto fail;
     }
 
     // Check wether we have an info frame or not
