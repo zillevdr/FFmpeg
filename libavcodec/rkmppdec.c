@@ -463,10 +463,6 @@ static int ffrkmpp_receive_frame(AVCodecContext *avctx, AVFrame *frame)
         }
     }
 
-    // make sure we keep decoder full
-    if (freeslots > 1 && !decoder->eos_reached)
-        return AVERROR(EAGAIN);
-
     return ffrkmpp_retrieve_frame(avctx, frame);
 }
 
