@@ -48,6 +48,7 @@ typedef struct {
     char first_frame;
     char first_packet;
     char eos_reached;
+    int frame_count;
 
     AVBufferRef *frames_ref;
     AVBufferRef *device_ref;
@@ -114,7 +115,7 @@ static int rkmpp_write_data(AVCodecContext *avctx, uint8_t *buffer, int size, in
             ret = AVERROR_UNKNOWN;
     }
     else
-        av_log(avctx, AV_LOG_DEBUG, "Wrote %d bytes to decoder\n", size);
+        av_log(avctx, AV_LOG_DEBUG, "Wrote %d bytes to decoder (pts = %" PRId64 ")\n", size, pts);
 
     mpp_packet_deinit(&packet);
 
@@ -411,7 +412,6 @@ retry_get_frame:
         }
 
         // here we should have a valid frame
-        av_log(avctx, AV_LOG_DEBUG, "Received a frame.\n");
 
         // setup general frame fields
         frame->format           = AV_PIX_FMT_DRM_PRIME;
@@ -430,6 +430,7 @@ retry_get_frame:
 
         // now setup the frame buffer info
         buffer = mpp_frame_get_buffer(mppframe);
+       //  av_log(avctx, AV_LOG_DEBUG, "Received Buffer %p.\n", buffer);
         if (buffer) {
             desc = av_mallocz(sizeof(AVDRMFrameDescriptor));
             if (!desc) {
@@ -481,6 +482,9 @@ retry_get_frame:
                 ret = AVERROR(ENOMEM);
                 goto fail;
             }
+
+            decoder->frame_count++;
+            av_log(avctx, AV_LOG_DEBUG, "Received a frame. (#%d), (%d x %d), pts=%" PRId64 "\n", decoder->frame_count, frame->width, frame->height, frame->pts);
 
             decoder->first_frame = 0;
             return 0;
