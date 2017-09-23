@@ -68,6 +68,7 @@ static MppCodingType rkmpp_get_codingtype(AVCodecContext *avctx)
     switch (avctx->codec_id) {
     case AV_CODEC_ID_H264:          return MPP_VIDEO_CodingAVC;
     case AV_CODEC_ID_HEVC:          return MPP_VIDEO_CodingHEVC;
+    case AV_CODEC_ID_MPEG2VIDEO:    return MPP_VIDEO_CodingMPEG2;
     case AV_CODEC_ID_VP8:           return MPP_VIDEO_CodingVP8;
     case AV_CODEC_ID_VP9:           return MPP_VIDEO_CodingVP9;
     default:                        return MPP_VIDEO_CodingUnused;
@@ -194,6 +195,14 @@ static int rkmpp_init_decoder(AVCodecContext *avctx)
     ret = mpp_create(&decoder->ctx, &decoder->mpi);
     if (ret != MPP_OK) {
         av_log(avctx, AV_LOG_ERROR, "Failed to create MPP context (code = %d).\n", ret);
+        ret = AVERROR_UNKNOWN;
+        goto fail;
+    }
+
+    paramS32 = 1;
+    ret = decoder->mpi->control(decoder->ctx, MPP_DEC_SET_PARSER_SPLIT_MODE, &paramS32);
+    if (ret != MPP_OK) {
+        av_log(avctx, AV_LOG_ERROR, "Failed to set parser split mode on MPI (code = %d).\n", ret);
         ret = AVERROR_UNKNOWN;
         goto fail;
     }
@@ -587,5 +596,6 @@ static void rkmpp_flush(AVCodecContext *avctx)
 
 RKMPP_DEC(h264,  AV_CODEC_ID_H264,          "h264_mp4toannexb")
 RKMPP_DEC(hevc,  AV_CODEC_ID_HEVC,          "hevc_mp4toannexb")
+RKMPP_DEC(mpeg2, AV_CODEC_ID_MPEG2VIDEO,    NULL)
 RKMPP_DEC(vp8,   AV_CODEC_ID_VP8,           NULL)
 RKMPP_DEC(vp9,   AV_CODEC_ID_VP9,           NULL)

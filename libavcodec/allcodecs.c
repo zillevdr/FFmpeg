@@ -257,6 +257,7 @@ static void register_all(void)
 #endif /* FF_API_XVMC */
     REGISTER_ENCDEC (MPEG1VIDEO,        mpeg1video);
     REGISTER_ENCDEC (MPEG2VIDEO,        mpeg2video);
+    REGISTER_DECODER(MPEG2_RKMPP,       mpeg2_rkmpp);
     REGISTER_ENCDEC (MPEG4,             mpeg4);
     REGISTER_DECODER(MPEG4_CRYSTALHD,   mpeg4_crystalhd);
     REGISTER_ENCDEC (MPEG4_V4L2M2M,     mpeg4_v4l2m2m);
