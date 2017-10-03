@@ -347,16 +347,9 @@ static int rkmpp_retrieve_frame(AVCodecContext *avctx, AVFrame *frame)
     // in order to let it time to complete it's init, then we sleep a bit between retries.
 retry_get_frame:
     ret = decoder->mpi->decode_get_frame(decoder->ctx, &mppframe);
-    if (ret != MPP_OK && ret != MPP_ERR_TIMEOUT && !decoder->first_frame) {
-        if (retrycount < 5) {
-            av_log(avctx, AV_LOG_DEBUG, "Failed to get a frame, retrying (code = %d, retrycount = %d)\n", ret, retrycount);
-            usleep(10000);
-            retrycount++;
-            goto retry_get_frame;
-        } else {
-            av_log(avctx, AV_LOG_ERROR, "Failed to get a frame from MPP (code = %d)\n", ret);
-            goto fail;
-        }
+    if (ret != MPP_OK) {
+        av_log(avctx, AV_LOG_ERROR, "can't get a frame frome decoder (code = %d)\n", ret);
+        goto fail;
     }
 
     if (mppframe) {
