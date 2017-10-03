@@ -200,13 +200,13 @@ static int rkmpp_init_decoder(AVCodecContext *avctx)
         goto fail;
     }
 
-    paramS32 = 1;
+/*    paramS32 = 1;
     ret = decoder->mpi->control(decoder->ctx, MPP_DEC_SET_PARSER_SPLIT_MODE, &paramS32);
     if (ret != MPP_OK) {
         av_log(avctx, AV_LOG_ERROR, "Failed to set parser split mode on MPI (code = %d).\n", ret);
         ret = AVERROR_UNKNOWN;
         goto fail;
-    }
+    }*/
 
     // initialize mpp
     ret = mpp_init(decoder->ctx, MPP_CTX_DEC, codectype);
