@@ -71,6 +71,7 @@ static void register_all(void)
     REGISTER_HWACCEL(H264_MEDIACODEC,   h264_mediacodec);
     REGISTER_HWACCEL(H264_MMAL,         h264_mmal);
     REGISTER_HWACCEL(H264_QSV,          h264_qsv);
+    REGISTER_HWACCEL(H264_RKMPP,        h264_rkmpp);
     REGISTER_HWACCEL(H264_VAAPI,        h264_vaapi);
     REGISTER_HWACCEL(H264_VDA,          h264_vda);
     REGISTER_HWACCEL(H264_VDA_OLD,      h264_vda_old);
@@ -82,6 +83,7 @@ static void register_all(void)
     REGISTER_HWACCEL(HEVC_DXVA2,        hevc_dxva2);
     REGISTER_HWACCEL(HEVC_MEDIACODEC,   hevc_mediacodec);
     REGISTER_HWACCEL(HEVC_QSV,          hevc_qsv);
+    REGISTER_HWACCEL(HEVC_RKMPP,        hevc_rkmpp);
     REGISTER_HWACCEL(HEVC_VAAPI,        hevc_vaapi);
     REGISTER_HWACCEL(HEVC_VDPAU,        hevc_vdpau);
     REGISTER_HWACCEL(MJPEG_CUVID,       mjpeg_cuvid);

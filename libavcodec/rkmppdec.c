@@ -571,6 +571,13 @@ static void rkmpp_flush(AVCodecContext *avctx)
         av_log(avctx, AV_LOG_ERROR, "Failed to reset MPI (code = %d)\n", ret);
 }
 
+#define FFRKMPP_DEC_HWACCEL(NAME, ID) \
+  AVHWAccel ff_##NAME##_rkmpp_hwaccel = { \
+      .name       = #NAME "_rkmpp", \
+      .type       = AVMEDIA_TYPE_VIDEO,\
+      .id         = ID, \
+      .pix_fmt    = AV_PIX_FMT_DRM_PRIME,\
+  };
 
 #define RKMPP_DEC_CLASS(NAME) \
     static const AVClass rkmpp_##NAME##_dec_class = { \
@@ -580,6 +587,7 @@ static void rkmpp_flush(AVCodecContext *avctx)
 
 #define RKMPP_DEC(NAME, ID, BSFS) \
     RKMPP_DEC_CLASS(NAME) \
+    FFRKMPP_DEC_HWACCEL(NAME, ID) \
     AVCodec ff_##NAME##_rkmpp_decoder = { \
         .name           = #NAME "_rkmpp", \
         .long_name      = NULL_IF_CONFIG_SMALL(#NAME " (rkmpp)"), \
