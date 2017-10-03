@@ -546,10 +546,6 @@ static int rkmpp_receive_frame(AVCodecContext *avctx, AVFrame *frame)
                 return ret;
             }
         }
-
-        // make sure we keep decoder full
-        if (freeslots > 1 && decoder->first_frame)
-            return AVERROR(EAGAIN);
     }
 
     return rkmpp_retrieve_frame(avctx, frame);
