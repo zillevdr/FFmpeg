@@ -337,7 +337,6 @@ static int rkmpp_retrieve_frame(AVCodecContext *avctx, AVFrame *frame)
     MppBuffer buffer = NULL;
     AVDRMFrameDescriptor *desc = NULL;
     AVDRMLayerDescriptor *layer = NULL;
-    int retrycount = 0;
     int format, mode;
 
     // on start of decoding, MPP can return -1, which is supposed to be expected
@@ -349,6 +348,18 @@ retry_get_frame:
     ret = decoder->mpi->decode_get_frame(decoder->ctx, &mppframe);
     if (ret != MPP_OK) {
         av_log(avctx, AV_LOG_ERROR, "can't get a frame frome decoder (code = %d)\n", ret);
+        goto fail;
+    }
+
+    if (decoder->eos_reached && !mpp_frame_get_eos(mppframe)) {
+        if (mppframe)
+            mpp_frame_deinit(&mppframe);
+        usleep(10000);
+        goto retry_get_frame;
+    }
+    if (mppframe && mpp_frame_get_eos(mppframe)) {
+        av_log(avctx, AV_LOG_DEBUG, "EOS frame found\n");
+        ret = AVERROR_EXIT;
         goto fail;
     }
 
