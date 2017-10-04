@@ -347,7 +347,7 @@ static int rkmpp_retrieve_frame(AVCodecContext *avctx, AVFrame *frame)
 retry_get_frame:
     ret = decoder->mpi->decode_get_frame(decoder->ctx, &mppframe);
     if (ret != MPP_OK) {
-        av_log(avctx, AV_LOG_ERROR, "can't get a frame frome decoder (code = %d)\n", ret);
+        av_log(avctx, AV_LOG_DEBUG, "can't get a frame frome decoder (code = %d)\n", ret);
         goto fail;
     }
 
